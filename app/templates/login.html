@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>로그인 · 클라우드 엔지니어 보안 메모장</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="card narrow">
+    <h1>🔐 보안 메모장</h1>
+    <p class="muted">인증된 클라우드 엔지니어만 접근할 수 있습니다.</p>
+    <form id="login-form" autocomplete="on">
+      <label>아이디 <input name="username" required maxlength="50" autocomplete="username"></label>
+      <label>비밀번호 <input name="password" type="password" required maxlength="128" autocomplete="current-password"></label>
+      <button type="submit">로그인</button>
+      <p id="msg" class="error" role="alert"></p>
+    </form>
+  </main>
+  <script src="/static/api.js"></script>
+  <script src="/static/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>클라우드 엔지니어 보안 메모장</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <strong>🔐 클라우드 엔지니어 보안 메모장</strong>
+    <div class="profile">
+      <span>이름: <b id="me-name">…</b></span>
+      <span>GitHub: <b id="me-github">…</b></span>
+      <button id="logout" class="secondary">로그아웃</button>
+    </div>
+  </header>
+
+  <main class="card">
+    <h2>새 메모</h2>
+    <form id="memo-form">
+      <input name="title" placeholder="제목 (100자 이하)" required maxlength="100">
+      <textarea name="content" placeholder="내용 (2000자 이하)" required maxlength="2000" rows="4"></textarea>
+      <button type="submit">저장</button>
+      <p id="msg" class="error" role="alert"></p>
+    </form>
+  </main>
+
+  <main class="card">
+    <h2>메모 목록</h2>
+    <ul id="memo-list" class="memos"></ul>
+  </main>
+
+  <script src="/static/api.js"></script>
+  <script src="/static/main.js"></script>
+</body>
+</html>

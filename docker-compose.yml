@@ -1,0 +1,76 @@
+# 3-Tier: [외부] → web(Nginx) ─frontend─ app(Flask) ─backend(internal)─ db(MariaDB)
+# - web 은 backend 네트워크에 없으므로 DB에 도달 불가
+# - backend 는 internal 네트워크 → 외부 인터넷/호스트 포트 노출 불가
+# - db 에는 ports 설정이 없음 → 호스트에서도 3306 접근 불가
+# - container_name 을 고정하지 않아 롤링 배포 시 이름 충돌이 없음
+name: secure-memo
+
+services:
+  web:
+    image: ${DOCKERHUB_USERNAME:-local}/secure-memo-web:${IMAGE_TAG:-latest}
+    build: ./nginx
+    ports:
+      - "80:8080"
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [frontend]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    restart: unless-stopped
+
+  app:
+    image: ${DOCKERHUB_USERNAME:-local}/secure-memo-app:${IMAGE_TAG:-latest}
+    build: ./app
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:?DB_NAME 필요}
+      DB_USER: ${DB_USER:?DB_USER 필요}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 필요}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET 필요}
+      COOKIE_SECURE: ${COOKIE_SECURE:-auto}
+      SEED_USERNAME: ${SEED_USERNAME:-tester}
+      SEED_PASSWORD: ${SEED_PASSWORD:?SEED_PASSWORD 필요}
+      OWNER_NAME: ${OWNER_NAME:?OWNER_NAME 필요}
+      OWNER_GITHUB_ID: ${OWNER_GITHUB_ID:?OWNER_GITHUB_ID 필요}
+    depends_on:
+      db:
+        condition: service_healthy   # DB 초기화 완료 후 WAS 기동
+    networks: [frontend, backend]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    stop_grace_period: 25s
+    restart: unless-stopped
+
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: ${DB_NAME}
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD 필요}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - db_data:/var/lib/mysql       # 컨테이너 재생성에도 데이터 유지
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks: [backend]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+networks:
+  frontend: {}
+  backend:
+    internal: true
+
+volumes:
+  db_data: {}

@@ -1,0 +1,97 @@
+name: CI/CD - Build, Push & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 연속 push 시 배포가 겹치지 않도록 직렬화 (진행 중인 배포는 취소하지 않음)
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  APP_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/secure-memo-app
+  WEB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/secure-memo-web
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 문법 검사
+        run: python -m py_compile app/app.py app/gunicorn.conf.py
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Docker Hub 로그인
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}   # 비밀번호가 아닌 Access Token 사용
+
+      - name: WAS 이미지 빌드 & 푸시
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app
+          push: true
+          tags: |
+            ${{ env.APP_IMAGE }}:latest
+            ${{ env.APP_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,mode=max,scope=app
+
+      - name: Web(Nginx) 이미지 빌드 & 푸시
+        uses: docker/build-push-action@v6
+        with:
+          context: ./nginx
+          push: true
+          tags: |
+            ${{ env.WEB_IMAGE }}:latest
+            ${{ env.WEB_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 배포 파일 전송 (compose, deploy.sh)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          source: "docker-compose.yml,deploy/deploy.sh"
+          target: "~/secure-memo"
+          strip_components: 0
+
+      - name: 운영 서버 배포 실행
+        uses: appleboy/ssh-action@v1
+        env:
+          PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
+          IMAGE_TAG: ${{ github.sha }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          envs: PROD_ENV_FILE,IMAGE_TAG
+          script: |
+            set -e
+            cd ~/secure-memo
+            mv -f deploy/deploy.sh ./deploy.sh && chmod +x deploy.sh
+            umask 077
+            # GitHub Secret 에 저장된 .env 전체를 서버에 기록 (저장소에는 존재하지 않음)
+            printf '%s\n' "$PROD_ENV_FILE" > .env
+            # 배포 추적을 위해 커밋 SHA 태그로 고정
+            sed -i '/^IMAGE_TAG=/d' .env && echo "IMAGE_TAG=${IMAGE_TAG}" >> .env
+            ./deploy.sh
