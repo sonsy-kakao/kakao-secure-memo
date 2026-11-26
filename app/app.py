@@ -344,7 +344,7 @@ def login():
     resp = make_response(jsonify({"ok": True}))
     secure = cookie_secure()
     resp.set_cookie(ACCESS_COOKIE, token, max_age=JWT_TTL_SECONDS, httponly=True,
-                    secure=secure, samesite="Strict", path="/")
+                    secure=secure, samesite="Lax", path="/")
     # CSRF 토큰은 JS가 읽어 헤더로 보내야 하므로 HttpOnly 아님 (JWT에 바인딩되어 위조 불가)
     resp.set_cookie(CSRF_COOKIE, csrf, max_age=JWT_TTL_SECONDS, httponly=False,
                     secure=secure, samesite="Strict", path="/")
@@ -361,7 +361,7 @@ def logout():
                     (g.claims["jti"], g.claims["exp"]))
         cur.execute("DELETE FROM revoked_tokens WHERE expires_at<%s", (int(time.time()),))
     resp = make_response(jsonify({"ok": True}))
-    resp.delete_cookie(ACCESS_COOKIE, path="/", samesite="Strict")
+    resp.delete_cookie(ACCESS_COOKIE, path="/", samesite="Lax")
     resp.delete_cookie(CSRF_COOKIE, path="/", samesite="Strict")
     return resp
 
